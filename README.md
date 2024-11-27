@@ -77,12 +77,17 @@ python -m src.database.setup_db
 
 2. **Collect Tweets**
 ```bash
-python -m src.data_collection.test_collection
+python -m src.data_collection.german_politics_collector
 ```
 
 3. **Generate Analysis**
 ```bash
 python -m src.analysis.tweet_analyzer
+```
+
+4. **Run Tests**
+```bash
+python -m src.tests.test_system_integration
 ```
 
 This will create several visualizations:

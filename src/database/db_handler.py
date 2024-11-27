@@ -1,15 +1,19 @@
 import psycopg2
 from psycopg2.extras import Json
 from src.config.config_loader import get_database_config
+import logging
 
 class DatabaseHandler:
+    """Handles database operations for storing and retrieving tweets."""
+
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
         self.config = get_database_config()
         self.conn = None
         self.connect()
 
     def connect(self):
-        """Establish database connection"""
+        """Establish database connection with error handling."""
         try:
             self.conn = psycopg2.connect(
                 host=self.config['host'],
@@ -18,9 +22,9 @@ class DatabaseHandler:
                 user=self.config['user'],
                 password=self.config['password']
             )
-            print("Successfully connected to database")
+            self.logger.info("Successfully connected to database")
         except Exception as e:
-            print(f"Error connecting to database: {str(e)}")
+            self.logger.error(f"Error connecting to database: {str(e)}")
             raise
 
     def init_tables(self):
@@ -44,27 +48,32 @@ class DatabaseHandler:
             self.conn.commit()
 
     def store_tweets(self, tweets, is_political_account=False):
-        """Store tweets in the database"""
+        """Store tweets in the database."""
         with self.conn.cursor() as cur:
             for tweet in tweets:
-                cur.execute("""
-                    INSERT INTO tweets (
-                        id, text, created_at, collected_at, 
-                        account_name, metrics, lang, is_political_account
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (id) DO UPDATE SET
-                        metrics = EXCLUDED.metrics,
-                        collected_at = EXCLUDED.collected_at
-                """, (
-                    tweet['id'],
-                    tweet['text'],
-                    tweet['created_at'],
-                    tweet['collected_at'],
-                    tweet.get('account', None),
-                    Json(tweet['metrics']),
-                    tweet.get('lang', 'de'),
-                    is_political_account
-                ))
+                try:
+                    cur.execute("""
+                        INSERT INTO tweets (
+                            id, text, created_at, collected_at, 
+                            account_name, metrics, lang, is_political_account
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                            metrics = EXCLUDED.metrics,
+                            collected_at = EXCLUDED.collected_at
+                    """, (
+                        tweet['id'],
+                        tweet['text'],
+                        tweet['created_at'],
+                        tweet['collected_at'],
+                        tweet.get('account', None),
+                        Json(tweet['metrics']),
+                        tweet.get('lang', 'de'),
+                        is_political_account
+                    ))
+                except Exception as e:
+                    self.logger.error(f"Error storing tweet {tweet['id']}: {str(e)}")
+                    self.conn.rollback()
+                    continue
             self.conn.commit()
 
     def get_recent_tweets(self, limit=100):
@@ -79,7 +88,7 @@ class DatabaseHandler:
             return cur.fetchall()
 
     def close(self):
-        """Close database connection"""
+        """Safely close database connection."""
         if self.conn:
             self.conn.close()
 
@@ -87,4 +96,4 @@ class DatabaseHandler:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close() 
+        self.close()

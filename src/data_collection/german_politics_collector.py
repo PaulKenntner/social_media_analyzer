@@ -1,21 +1,13 @@
+from typing import List, Dict
 import tweepy
-from src.config.config_loader import get_twitter_config
 from datetime import datetime
+import logging
+from src.config.config_loader import get_twitter_config
 from src.database.db_handler import DatabaseHandler
 
 class GermanPoliticsCollector:
-    def __init__(self):
-        config = get_twitter_config()
-        self.client = tweepy.Client(
-            bearer_token=config['bearer_token'],
-            consumer_key=config['api_key'],
-            consumer_secret=config['api_secret'],
-            access_token=config['access_token'],
-            access_token_secret=config['access_token_secret'],
-            wait_on_rate_limit=True
-        )
-
-    # Common German political party hashtags and keywords
+    """Collects tweets from German political discourse using Twitter's API."""
+    
     POLITICAL_KEYWORDS = [
         'Bundestag', 'Bundesregierung',
         'CDU', 'SPD', 'Grüne', 'FDP', 'AfD', 'Linke',
@@ -23,7 +15,6 @@ class GermanPoliticsCollector:
         'Deutsche Politik', 'Bundestagswahl'
     ]
 
-    # Major German political accounts
     POLITICAL_ACCOUNTS = [
         'Bundestag',
         'RegSprecher',
@@ -33,10 +24,25 @@ class GermanPoliticsCollector:
         'fdp',
     ]
 
-    def search_political_tweets(self, max_results=50):
-        """Search for recent tweets about German politics"""
-        query = ' OR '.join(self.POLITICAL_KEYWORDS)
-        query += ' lang:de'  # Only German language tweets
+    def __init__(self) -> None:
+        """Initialize collector with Twitter API credentials."""
+        try:
+            config = get_twitter_config()
+            self.client = tweepy.Client(
+                bearer_token=config['bearer_token'],
+                consumer_key=config['api_key'],
+                consumer_secret=config['api_secret'],
+                access_token=config['access_token'],
+                access_token_secret=config['access_token_secret'],
+                wait_on_rate_limit=True
+            )
+            self.logger = logging.getLogger(__name__)
+        except KeyError as e:
+            raise ValueError(f"Missing required configuration: {e}")
+
+    def search_political_tweets(self, max_results: int = 100) -> List[Dict]:
+        """Search for recent German political tweets."""
+        query = ' OR '.join(self.POLITICAL_KEYWORDS) + ' lang:de'
         
         try:
             tweets = self.client.search_recent_tweets(
@@ -46,6 +52,7 @@ class GermanPoliticsCollector:
             )
             
             if not tweets.data:
+                self.logger.warning("No tweets found for query")
                 return []
 
             return [{
@@ -56,22 +63,21 @@ class GermanPoliticsCollector:
                 'collected_at': datetime.now()
             } for tweet in tweets.data]
 
-        except Exception as e:
-            print(f"Error collecting tweets: {str(e)}")
+        except tweepy.TweepyException as e:
+            self.logger.error(f"Twitter API error: {str(e)}")
             return []
 
-    def get_political_accounts_tweets(self, max_results=50):
-        """Get recent tweets from major political accounts"""
+    def get_political_accounts_tweets(self, max_results: int = 50) -> List[Dict]:
+        """Collect recent tweets from major German political accounts."""
         all_tweets = []
         
         for account in self.POLITICAL_ACCOUNTS:
             try:
-                # First get the user ID
                 user = self.client.get_user(username=account)
                 if not user.data:
+                    self.logger.warning(f"Could not find user: {account}")
                     continue
 
-                # Then get their tweets
                 tweets = self.client.get_users_tweets(
                     id=user.data.id,
                     max_results=max_results,
@@ -79,40 +85,48 @@ class GermanPoliticsCollector:
                 )
                 
                 if tweets.data:
-                    account_tweets = [{
+                    all_tweets.extend([{
                         'id': tweet.id,
                         'text': tweet.text,
                         'created_at': tweet.created_at,
                         'metrics': tweet.public_metrics,
                         'account': account,
                         'collected_at': datetime.now()
-                    } for tweet in tweets.data]
-                    all_tweets.extend(account_tweets)
+                    } for tweet in tweets.data])
 
-            except Exception as e:
-                print(f"Error collecting tweets for {account}: {str(e)}")
+            except tweepy.TweepyException as e:
+                self.logger.error(f"Error collecting tweets for {account}: {e}")
                 continue
 
         return all_tweets
 
-    def collect_and_store(self):
-        """Collect tweets and store them in the database"""
-        with DatabaseHandler() as db:
-            # Collect and store general political tweets
-            political_tweets = self.search_political_tweets()
-            if political_tweets:
-                db.store_tweets(political_tweets, is_political_account=False)
-                print(f"Stored {len(political_tweets)} general political tweets")
+    def collect_and_store(self) -> None:
+        """Collect tweets and store them in the database."""
+        try:
+            with DatabaseHandler() as db:
+                # Collect and store general political tweets
+                political_tweets = self.search_political_tweets()
+                if political_tweets:
+                    db.store_tweets(political_tweets, is_political_account=False)
+                    self.logger.info(f"Stored {len(political_tweets)} general political tweets")
 
-            # Collect and store tweets from political accounts
-            account_tweets = self.get_political_accounts_tweets()
-            if account_tweets:
-                db.store_tweets(account_tweets, is_political_account=True)
-                print(f"Stored {len(account_tweets)} tweets from political accounts")
+                # Collect and store tweets from political accounts
+                account_tweets = self.get_political_accounts_tweets()
+                if account_tweets:
+                    db.store_tweets(account_tweets, is_political_account=True)
+                    self.logger.info(f"Stored {len(account_tweets)} tweets from political accounts")
+        
+        except Exception as e:
+            self.logger.error(f"Error in collect_and_store: {str(e)}")
+            raise
 
 if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    
     # Test the collector
     collector = GermanPoliticsCollector()
-    
-    print("Collecting and storing general political tweets...")
-    political_tweets = collector.collect_and_store()
+    collector.collect_and_store()
