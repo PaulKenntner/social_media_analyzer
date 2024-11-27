@@ -1,0 +1,16 @@
+{
+    "twitter_api": {
+        "api_key": "your_api_key",
+        "api_secret": "your_api_secret",
+        "access_token": "your_access_token",
+        "access_token_secret": "your_access_token_secret",
+        "bearer_token": "your_bearer_token"
+    },
+    "database": {
+        "host": "localhost",
+        "port": 5432,
+        "name": "german_politics_db",
+        "user": "your_username",
+        "password": "your_password"
+    }
+}
