@@ -115,10 +115,13 @@ social_media_analyzer/
 │   ├── data_processing/
 │   │   ├── __init__.py
 │   │   └── data_transformer.py
-│   └── database/
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── db_handler.py
+│   │   └── setup_db.py
+│   └── tests/
 │       ├── __init__.py
-│       ├── db_handler.py
-│       └── setup_db.py
+│       └── test_system_integration.py
 ├── requirements.txt
 └── README.md
 ```
