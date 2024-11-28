@@ -110,8 +110,7 @@ social_media_analyzer/
 │   │   └── config_loader.py
 │   ├── data_collection/
 │   │   ├── __init__.py
-│   │   ├── german_politics_collector.py
-│   │   ├── twitter_client.py
+│   │   └── german_politics_collector.py
 │   ├── data_processing/
 │   │   ├── __init__.py
 │   │   └── data_transformer.py
